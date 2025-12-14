@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RN Location Test Receiver</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    h1 { color: #D71920; }
+    .status {
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 4px;
+      font-weight: bold;
+    }
+    .success { background: #d4edda; color: #155724; }
+    .error { background: #f8d7da; color: #721c24; }
+    .info { background: #d1ecf1; color: #0c5460; }
+    #log {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      padding: 15px;
+      border-radius: 4px;
+      max-height: 400px;
+      overflow-y: auto;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      margin-top: 20px;
+    }
+    .log-entry {
+      margin: 5px 0;
+      padding: 5px;
+      border-left: 3px solid #007acc;
+      padding-left: 10px;
+    }
+    button {
+      background: #D71920;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin: 5px;
+    }
+    button:hover {
+      background: #b01518;
+    }
+    .coords {
+      background: #e9ecef;
+      padding: 15px;
+      border-radius: 4px;
+      margin: 10px 0;
+    }
+    .coords div {
+      margin: 5px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🗺️ React Native Location Test Receiver</h1>
+    
+    <div id="status" class="status info">
+      ⏳ Waiting for location updates from React Native...
+    </div>
+    
+    <div class="coords">
+      <h3>Last Received Location:</h3>
+      <div><strong>Type:</strong> <span id="msgType">-</span></div>
+      <div><strong>Latitude:</strong> <span id="lat">-</span></div>
+      <div><strong>Longitude:</strong> <span id="lng">-</span></div>
+      <div><strong>Heading:</strong> <span id="heading">-</span>°</div>
+      <div><strong>Accuracy:</strong> <span id="accuracy">-</span>m</div>
+      <div><strong>Timestamp:</strong> <span id="timestamp">-</span></div>
+    </div>
+    
+    <div>
+      <button onclick="testManualUpdate()">🧪 Test Manual Update</button>
+      <button onclick="sendToRN()">📤 Request Current Location from RN</button>
+      <button onclick="clearLog()">🗑️ Clear Log</button>
+    </div>
+    
+    <div id="log"></div>
+  </div>
+
+  <script>
+    let updateCount = 0;
+    
+    function log(message, color = '#d4d4d4') {
+      const logDiv = document.getElementById('log');
+      const entry = document.createElement('div');
+      entry.className = 'log-entry';
+      entry.style.borderLeftColor = color;
+      const timestamp = new Date().toLocaleTimeString();
+      entry.innerHTML = `<span style="color: #858585">[${timestamp}]</span> ${message}`;
+      logDiv.appendChild(entry);
+      logDiv.scrollTop = logDiv.scrollHeight;
+    }
+    
+    function clearLog() {
+      document.getElementById('log').innerHTML = '';
+      log('Log cleared', '#ffa500');
+    }
+    
+    function updateStatus(message, type = 'info') {
+      const statusDiv = document.getElementById('status');
+      statusDiv.className = `status ${type}`;
+      statusDiv.textContent = message;
+    }
+    
+    function updateCoords(data) {
+      document.getElementById('msgType').textContent = data.type || '-';
+      document.getElementById('lat').textContent = data.lat?.toFixed(6) || '-';
+      document.getElementById('lng').textContent = data.lng?.toFixed(6) || '-';
+      document.getElementById('heading').textContent = data.heading?.toFixed(2) || '-';
+      document.getElementById('accuracy').textContent = data.accuracy?.toFixed(1) || '-';
+      document.getElementById('timestamp').textContent = data.timestamp 
+        ? new Date(data.timestamp).toLocaleTimeString() 
+        : '-';
+    }
+    
+    // ✅ Define the function that React Native expects
+    window.__updateMapFromRN = function(lat, lng, heading) {
+      updateCount++;
+      log(`✅ __updateMapFromRN called (#${updateCount}): lat=${lat}, lng=${lng}, heading=${heading}`, '#4caf50');
+      
+      updateCoords({ lat, lng, heading, type: 'Function Call' });
+      updateStatus(`✅ Received update #${updateCount} via function call`, 'success');
+      
+      // In Bubble, you would update your Naver Map marker here
+      // Example: window.myNaverMap.setCenter(new naver.maps.LatLng(lat, lng));
+    };
+    
+    log('✅ window.__updateMapFromRN defined', '#4caf50');
+    
+    // ✅ Also listen for postMessage (backup method)
+    window.addEventListener('message', function(event) {
+      try {
+        const data = JSON.parse(event.data);
+        
+        if (data.type === 'LOCATION_INIT' || data.type === 'LOCATION_UPDATE' || data.type === 'GPS_UPDATE') {
+          updateCount++;
+          log(`📩 Message received (#${updateCount}): ${data.type}`, '#2196f3');
+          log(`   Coordinates: lat=${data.lat}, lng=${data.lng}, heading=${data.heading || 0}`, '#90caf9');
+          
+          updateCoords(data);
+          updateStatus(`✅ Received update #${updateCount} via postMessage (${data.type})`, 'success');
+          
+          // Call the update function if it exists
+          if (typeof window.__updateMapFromRN === 'function') {
+            window.__updateMapFromRN(data.lat, data.lng, data.heading || 0);
+          }
+        } else {
+          log(`ℹ️ Other message type: ${data.type}`, '#858585');
+        }
+      } catch (e) {
+        // Not JSON or not relevant
+      }
+    });
+    
+    log('✅ Message listener registered', '#4caf50');
+    
+    function testManualUpdate() {
+      // Simulate Seoul coordinates
+      const testLat = 37.5665;
+      const testLng = 126.9780;
+      const testHeading = 45;
+      
+      log('🧪 Testing manual update...', '#ffa500');
+      window.__updateMapFromRN(testLat, testLng, testHeading);
+    }
+    
+    function sendToRN() {
+      if (window.ReactNativeWebView) {
+        const message = JSON.stringify({ type: 'REQUEST_CURRENT_LOCATION' });
+        window.ReactNativeWebView.postMessage(message);
+        log('📤 Sent REQUEST_CURRENT_LOCATION to RN', '#ff9800');
+        updateStatus('⏳ Waiting for location response from RN...', 'info');
+      } else {
+        log('❌ ReactNativeWebView not available (not in RN app)', '#f44336');
+        updateStatus('❌ Not running in React Native WebView', 'error');
+      }
+    }
+    
+    // Check environment
+    if (window.ReactNativeWebView) {
+      log('✅ Running inside React Native WebView', '#4caf50');
+      updateStatus('✅ Connected to React Native app', 'success');
+    } else {
+      log('⚠️ NOT running in React Native (testing in browser)', '#ff9800');
+      updateStatus('⚠️ Testing in browser mode', 'info');
+    }
+    
+    log('🚀 Test receiver ready', '#4caf50');
+  </script>
+</body>
+</html>

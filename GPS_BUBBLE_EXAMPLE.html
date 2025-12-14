@@ -1,0 +1,308 @@
+<!-- GPS Integration Example for Bubble App
+     This shows how to use GPS location updates in your Bubble application
+-->
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>TimeDealing - GPS Integration Example</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .gps-container { border: 1px solid #ddd; padding: 15px; border-radius: 8px; margin: 10px 0; }
+        .gps-status { font-size: 14px; color: #666; }
+        .gps-active { color: #4CAF50; font-weight: bold; }
+        .gps-inactive { color: #f44336; }
+        #gps-status, #gps-accuracy, #gps-time { margin: 10px 0; }
+        button { padding: 10px 20px; background: #D71920; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #b01014; }
+    </style>
+</head>
+<body>
+
+<h1>TimeDealing - GPS Location Integration</h1>
+
+<!-- GPS Status Display -->
+<div class="gps-container">
+    <h2>GPS Status</h2>
+    <div id="gps-status" class="gps-status">GPS: Not tracking</div>
+    <div id="gps-accuracy" class="gps-status">Accuracy: --</div>
+    <div id="gps-time" class="gps-status">Updated: --</div>
+</div>
+
+<!-- Map Container (Naver Maps example) -->
+<div class="gps-container">
+    <h2>Map</h2>
+    <div id="map" style="width: 100%; height: 400px; background: #f0f0f0; border-radius: 4px;">
+        Map will load here
+    </div>
+</div>
+
+<!-- Controls -->
+<div class="gps-container">
+    <h2>Controls</h2>
+    <button onclick="toggleAutoFollowLocation()">Toggle Auto-Follow Location</button>
+    <button onclick="showGPSStatus()">Show GPS Status</button>
+    <button onclick="showLastLocation()">Show Last Location</button>
+    <div id="debug-output" style="margin-top: 10px; padding: 10px; background: #f5f5f5; border-radius: 4px; font-family: monospace; max-height: 200px; overflow-y: auto;">
+        Debug output will appear here...
+    </div>
+</div>
+
+<script>
+/**
+ * GPS Integration Script for Bubble App
+ * This script receives GPS updates from React Native and updates the map
+ */
+
+// State variable for auto-follow location
+window.__autoFollowLocation = true;
+
+// Debug output function
+function addDebugLog(message) {
+    const output = document.getElementById('debug-output');
+    const timestamp = new Date().toLocaleTimeString();
+    output.innerHTML = `[${timestamp}] ${message}<br>` + output.innerHTML;
+    if (output.children.length > 50) {
+        output.removeChild(output.lastChild);
+    }
+}
+
+// Initialize GPS receiver (injected script will call this)
+if (typeof window.initializeGPSReceiver === 'function') {
+    console.log('GPS receiver found, initializing...');
+    window.initializeGPSReceiver();
+} else {
+    console.log('Waiting for GPS receiver to be injected...');
+}
+
+// Custom GPS update handler - this is called whenever GPS updates
+window.onGPSUpdate = function(location) {
+    console.log('[App] GPS Update Received:', {
+        lat: location.latitude,
+        lng: location.longitude,
+        accuracy: location.accuracy,
+    });
+
+    addDebugLog('GPS: ' + location.latitude.toFixed(4) + ', ' + location.longitude.toFixed(4));
+
+    // Example: Update Naver map if available
+    updateMapCenter(location);
+
+    // Example: Make API call to Bubble backend to save location
+    saveLocationToBubble(location);
+
+    // Example: Update any location-dependent UI
+    updateLocationUI(location);
+};
+
+/**
+ * Update map center with GPS location
+ */
+function updateMapCenter(location) {
+    try {
+        // Check if Naver Maps is loaded
+        if (typeof naver === 'undefined' || !naver.maps) {
+            console.log('[Map] Naver Maps not loaded yet');
+            return;
+        }
+
+        // Find map container
+        const container = document.getElementById('map');
+        if (!container || !container.__naverMap) {
+            console.log('[Map] Map container not initialized yet');
+            return;
+        }
+
+        const map = container.__naverMap;
+        const newCenter = new naver.maps.LatLng(location.latitude, location.longitude);
+
+        // Only update if auto-follow is enabled
+        if (window.__autoFollowLocation) {
+            // Optionally use panTo for smooth animation
+            // map.panTo(newCenter);
+            
+            // Or use setCenter for immediate update
+            map.setCenter(newCenter);
+            
+            console.log('[Map] Center updated to GPS location');
+            addDebugLog('Map updated');
+        }
+    } catch (error) {
+        console.error('[Map] Error updating map:', error);
+    }
+}
+
+/**
+ * Save location to Bubble backend
+ */
+function saveLocationToBubble(location) {
+    try {
+        // Make API call to Bubble to save location
+        // This would be specific to your Bubble app workflow
+        
+        // Example Bubble API call:
+        // fetch('https://timedealing.com/version-test/api/1.1/wf/save-user-location', {
+        //     method: 'POST',
+        //     headers: {
+        //         'Content-Type': 'application/json',
+        //     },
+        //     body: JSON.stringify({
+        //         latitude: location.latitude,
+        //         longitude: location.longitude,
+        //         accuracy: location.accuracy,
+        //     }),
+        // }).then(response => response.json())
+        //   .then(data => console.log('Location saved:', data))
+        //   .catch(error => console.error('Save error:', error));
+        
+        console.log('[API] Location saved to Bubble');
+    } catch (error) {
+        console.error('[API] Error saving location:', error);
+    }
+}
+
+/**
+ * Update location-dependent UI
+ */
+function updateLocationUI(location) {
+    // This is handled automatically by gps-receiver.js
+    // which updates #gps-status, #gps-accuracy, #gps-time
+    console.log('[UI] Location UI updated');
+}
+
+/**
+ * Toggle auto-follow location
+ */
+function toggleAutoFollowLocation() {
+    window.__autoFollowLocation = !window.__autoFollowLocation;
+    console.log('Auto-follow location:', window.__autoFollowLocation ? 'ON' : 'OFF');
+    addDebugLog('Auto-follow: ' + (window.__autoFollowLocation ? 'ON' : 'OFF'));
+    alert('Auto-follow location: ' + (window.__autoFollowLocation ? 'ON' : 'OFF'));
+}
+
+/**
+ * Show current GPS status
+ */
+function showGPSStatus() {
+    if (typeof window.getGPSStatus === 'function') {
+        const status = window.getGPSStatus();
+        console.log('GPS Status:', status);
+        addDebugLog('Status: ' + JSON.stringify(status));
+        alert(
+            'GPS Tracking: ' + (status.isTracking ? 'Active' : 'Inactive') + '\n' +
+            'Updates: ' + status.updateCount + '\n' +
+            'Last location: ' + (status.lastLocation ? 
+                status.lastLocation.latitude.toFixed(4) + ', ' + status.lastLocation.longitude.toFixed(4) : 
+                'None')
+        );
+    } else {
+        alert('GPS receiver not initialized');
+    }
+}
+
+/**
+ * Show last known location
+ */
+function showLastLocation() {
+    if (typeof window.getLastLocation === 'function') {
+        const location = window.getLastLocation();
+        if (location) {
+            console.log('Last Location:', location);
+            addDebugLog('Last: ' + location.latitude.toFixed(4) + ', ' + location.longitude.toFixed(4));
+            alert(
+                'Latitude: ' + location.latitude.toFixed(6) + '\n' +
+                'Longitude: ' + location.longitude.toFixed(6) + '\n' +
+                'Accuracy: ±' + Math.round(location.accuracy) + 'm\n' +
+                'Altitude: ' + (location.altitude ? Math.round(location.altitude) + 'm' : 'N/A') + '\n' +
+                'Speed: ' + (location.speed ? (location.speed * 3.6).toFixed(1) + ' km/h' : 'N/A')
+            );
+        } else {
+            alert('No location data yet');
+        }
+    } else {
+        alert('GPS receiver not initialized');
+    }
+}
+
+/**
+ * Add GPS listener for advanced usage
+ * Uncomment to use:
+ */
+/*
+if (typeof window.addGPSListener === 'function') {
+    window.addGPSListener(function(location) {
+        // This gets called for every GPS update
+        console.log('[Listener] GPS Update:', location);
+        
+        // Example: Send to analytics
+        // analytics.track('gps_update', {
+        //     latitude: location.latitude,
+        //     longitude: location.longitude,
+        //     accuracy: location.accuracy,
+        // });
+    });
+}
+*/
+
+// Log initialization
+console.log('GPS Integration Script Loaded');
+addDebugLog('Script loaded');
+
+// Wait for GPS receiver to initialize
+setTimeout(() => {
+    if (typeof window.getGPSStatus === 'function') {
+        const status = window.getGPSStatus();
+        console.log('GPS receiver initialized. Status:', status);
+        addDebugLog('GPS receiver ready');
+    }
+}, 2000);
+
+</script>
+
+<!-- Include Naver Maps JavaScript (example)
+<script type="text/javascript" src="https://openapi.map.naver.com/openapi/v3/maps.js?ncpClientId=YOUR_CLIENT_ID"></script>
+<script>
+    // Initialize Naver map
+    var mapOptions = {
+        center: new naver.maps.LatLng(37.566826, 126.9786567),
+        zoom: 16
+    };
+    var map = new naver.maps.Map('map', mapOptions);
+    document.getElementById('map').__naverMap = map;
+</script>
+-->
+
+</body>
+</html>
+
+<!--
+INTEGRATION INSTRUCTIONS:
+
+1. In your Bubble app, include this script or similar code:
+   - Create a custom HTML element
+   - Add the code above
+   - Or add individual functions to your existing app
+
+2. The GPS receiver (injected from React Native) will:
+   - Call window.onGPSUpdate with each location update
+   - Automatically update #gps-status, #gps-accuracy, #gps-time elements
+   - Automatically update map center if Naver Maps available
+
+3. Customize the behavior:
+   - Modify updateMapCenter() to use your map library
+   - Modify saveLocationToBubble() to call your API
+   - Modify updateLocationUI() for your UI
+
+4. Available functions:
+   - window.onGPSUpdate(location) - Main callback
+   - window.getLastLocation() - Get last position
+   - window.getGPSStatus() - Get current status
+   - window.addGPSListener(callback) - Add listener
+   - window.__autoFollowLocation - Toggle auto-center
+
+5. Debug commands in browser console:
+   - console.log(window.__gpsState) - Full state
+   - window.showGPSStatus() - Show status popup
+   - window.showLastLocation() - Show location popup
+   - window.__autoFollowLocation = false - Disable auto-follow
+-->

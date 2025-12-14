@@ -6,30 +6,66 @@
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "postinstall": "patch-package"
   },
   "dependencies": {
-    "@react-native-async-storage/async-storage": "2.2.0",
-    "@react-native-seoul/kakao-login": "^5.4.1",
+    "@react-native-async-storage/async-storage": "1.23.1",
+    "@react-native-firebase/app": "^18.8.0",
+    "@react-native-firebase/auth": "^18.8.0",
+    "@react-native-seoul/kakao-login": "^5.4.2",
     "axios": "^1.12.2",
-    "expo": "~54.0.10",
-    "expo-constants": "~18.0.9",
-    "expo-device": "~8.0.9",
-    "expo-linking": "~8.0.8",
-    "expo-notifications": "~0.32.12",
-    "expo-router": "~6.0.8",
-    "expo-secure-store": "~15.0.7",
-    "expo-splash-screen": "~31.0.10",
-    "expo-status-bar": "~3.0.8",
-    "react": "19.1.0",
-    "react-dom": "19.1.0",
-    "react-native": "0.81.4",
-    "react-native-webview": "13.15.0"
+    "expo": "~51.0.0",
+    "expo-build-properties": "~0.12.5",
+    "expo-device": "~6.0.2",
+    "expo-haptics": "~13.0.1",
+    "expo-linking": "~6.3.1",
+    "expo-location": "~17.0.1",
+    "expo-modules-core": "^1.12.26",
+    "expo-notifications": "~0.28.19",
+    "expo-router": "^3.5.17",
+    "expo-secure-store": "~13.0.2",
+    "expo-splash-screen": "~0.27.5",
+    "expo-status-bar": "~1.12.1",
+    "expo-web-browser": "~13.0.3",
+    "firebase": "^10.7.0",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "react-native": "0.74.4",
+    "react-native-safe-area-context": "4.10.5",
+    "react-native-screens": "3.31.1",
+    "react-native-webview": "13.8.6"
   },
   "private": true,
   "devDependencies": {
-    "@types/react": "~19.1.10",
-    "expo-dev-client": "^6.0.13",
-    "typescript": "~5.9.2"
+    "@types/react": "~18.2.45",
+    "expo-dev-client": "~4.0.29",
+    "expo-modules-autolinking": "^1.10.2",
+    "patch-package": "^8.0.1",
+    "typescript": "~5.3.3"
+  },
+  "codegenConfig": {
+    "libraries": [
+      {
+        "name": "@react-native-async-storage/async-storage",
+        "type": "all",
+        "jsSrcsDir": "."
+      },
+      {
+        "name": "react-native-webview",
+        "type": "all",
+        "jsSrcsDir": "."
+      },
+      {
+        "name": "react-native-screens",
+        "type": "all",
+        "jsSrcsDir": "."
+      },
+      {
+        "name": "react-native-safe-area-context",
+        "type": "all",
+        "jsSrcsDir": "."
+      }
+    ]
   }
 }

@@ -1,102 +1,108 @@
 {
   "expo": {
-    "name": "timedealing-app",
+    "sdkVersion": "51.0.0",
+    "name": "TimeDealing",
     "slug": "timedealing-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
-    "newArchEnabled": true,
-
+    "userInterfaceStyle": "automatic",
+    "scheme": "timedealing",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.timedealing.app",
+      "bundleIdentifier": "com.linkonomy.timedealing",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "UIBackgroundModes": ["remote-notification"],
         "NSUserTrackingUsageDescription": "이 앱은 맞춤 알림 제공을 위해 알림 권한을 사용합니다.",
         "CFBundleURLTypes": [
-          {
-            "CFBundleURLSchemes": ["timedealing"]
-          },
-          {
-            "CFBundleURLSchemes": ["kakaod6914396676906ad440f0d308ed139d1"]
-          }
+          { "CFBundleURLSchemes": ["timedealing"] },
+          { "CFBundleURLSchemes": ["kakaod6914396676906ad440f0d308ed139d1"] }
+        ],
+        "LSApplicationQueriesSchemes": [
+          "kakaokompassauth",
+          "kakaolink",
+          "kakaotalk"
         ]
       }
     },
-
     "android": {
       "package": "com.timedealing.app",
+      "versionCode": 1,
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
       "permissions": [
         "INTERNET",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
         "WAKE_LOCK",
         "VIBRATE",
         "RECEIVE_BOOT_COMPLETED",
         "FOREGROUND_SERVICE",
         "POST_NOTIFICATIONS"
       ],
-      "useNextNotificationsApi": true,
       "edgeToEdgeEnabled": true,
       "intentFilters": [
         {
           "action": "VIEW",
-          "data": [
-            {
-              "scheme": "timedealing",
-              "host": "kakao-login"
-            }
-          ],
+          "data": [{ "scheme": "timedealing", "host": "kakao-login" }],
           "category": ["BROWSABLE", "DEFAULT"]
         },
         {
           "action": "VIEW",
-          "data": [
-            {
-              "scheme": "kakaolink"
-            }
-          ],
+          "data": [{ "scheme": "kakaolink" }],
           "category": ["BROWSABLE", "DEFAULT"]
         },
         {
           "action": "VIEW",
-          "data": [
-            {
-              "scheme": "https"
-            }
-          ],
+          "data": [{ "scheme": "timedealing", "host": "expo-development-client" }],
+          "category": ["BROWSABLE", "DEFAULT"]
+        },
+        {
+          "action": "VIEW",
+          "data": [{ "scheme": "https" }],
           "category": ["BROWSABLE", "DEFAULT"]
         }
       ]
     },
-
-    "scheme": "timedealing",
-
     "web": {
       "favicon": "./assets/favicon.png"
     },
-
     "plugins": [
-      "expo-router",
-      "expo-secure-store",
-      "expo-notifications",
       [
-        "@react-native-seoul/kakao-login",
+        "expo-build-properties",
         {
-          "kakaoAppKey": "d6914396676906ad440f0d308ed139d1"
+          "android": {
+            "compileSdkVersion": 34,
+            "targetSdkVersion": 34,
+            "minSdkVersion": 24,
+            "kotlinVersion": "1.9.22"
+          },
+          "ios": {
+            "deploymentTarget": "15.1"
+          }
+        }
+      ],
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "color": "#D71920",
+          "sounds": [],
+          "androidMode": "default",
+          "androidCollapsedTitle": "#{unread_notifications} 개의 새 알림"
         }
       ]
     ],
-
     "extra": {
       "eas": {
         "projectId": "c1ff80a7-1688-4042-8204-8f07131e8564"
@@ -106,9 +112,6 @@
         "nativeAppKey": "d6914396676906ad440f0d308ed139d1"
       }
     },
-
-    "experiments": {
-      "typedRoutes": true
-    }
+    "owner": "alexko3836"
   }
 }
