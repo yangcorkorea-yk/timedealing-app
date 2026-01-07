@@ -33,13 +33,16 @@ platform :ios, podfile_properties['ios.deploymentTarget'] || '13.4'
 install! 'cocoapods',
   :deterministic_uuids => false
 
-use_modular_headers!
-
 prepare_react_native_project!
 
 target 'TimeDealing' do
   use_expo_modules!
   config = use_native_modules!
+
+  # Enable modular headers for Firebase dependencies
+  pod 'GoogleUtilities', :modular_headers => true
+  pod 'FirebaseCore', :modular_headers => true
+  pod 'FirebaseCoreInternal', :modular_headers => true
 
   use_react_native!(
     :path => config[:reactNativePath],
@@ -56,6 +59,15 @@ target 'TimeDealing' do
       :mac_catalyst_enabled => false,
       :ccache_enabled => podfile_properties['apple.ccacheEnabled'] == 'true',
     )
+
+    # Enable modular headers for Firebase pods
+    installer.pods_project.targets.each do |target|
+      if target.name.start_with?('Firebase') || target.name == 'GoogleUtilities'
+        target.build_configurations.each do |config|
+          config.build_settings['DEFINES_MODULE'] = 'YES'
+        end
+      end
+    end
 
     # This is necessary for Xcode 14, because it signs resource bundles by default
     # when building for devices.

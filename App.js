@@ -10,6 +10,25 @@ import { StatusBar } from "expo-status-bar";
 import * as Linking from "expo-linking";
 import KakaoLogin from "@react-native-seoul/kakao-login";
 
+// ✅ Kakao SDK 초기화
+const initializeKakaoSDK = async () => {
+  try {
+    const kakaoAppKey = "d6914396676906ad440f0d308ed139d1";
+    if (Platform.OS === "ios") {
+      await KakaoLogin.initWithAppKey(kakaoAppKey);
+      console.log("🟢 Kakao SDK iOS 초기화 완료");
+    } else if (Platform.OS === "android") {
+      await KakaoLogin.initWithAppKey(kakaoAppKey);
+      console.log("🟢 Kakao SDK Android 초기화 완료");
+    }
+  } catch (error) {
+    console.error("❌ Kakao SDK 초기화 실패:", error);
+  }
+};
+
+// ✅ App 시작 시 Kakao 초기화
+initializeKakaoSDK();
+
 // ✅ 푸시 알림 설정
 Notifications.setNotificationHandler({
   handleNotification: async () => ({

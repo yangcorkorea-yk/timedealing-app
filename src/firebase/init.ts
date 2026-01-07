@@ -1,7 +1,8 @@
 // ✅ src/firebase/init.ts
 import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
 import { getAnalytics, isSupported as isAnalyticsSupported, Analytics } from "firebase/analytics";
-import { getAuth } from "firebase/auth";
+import { initializeAuth, getReactNativePersistence, getAuth } from "firebase/auth";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDFteKDtNjZaagSB5F7Oc-LXsxBevoZmhY",
@@ -32,12 +33,20 @@ export async function ensureFirebaseInitialized() {
       firebaseApp = getApp();
     }
 
-    // ✅ Auth 초기화 (기본 persistence 사용)
+    // ✅ Auth 초기화 (AsyncStorage persistence 사용)
     try {
-      getAuth(firebaseApp!);
-      console.log("🔐 Firebase Auth initialized");
+      initializeAuth(firebaseApp!, {
+        persistence: getReactNativePersistence(AsyncStorage)
+      });
+      console.log("🔐 Firebase Auth initialized with AsyncStorage persistence");
     } catch (authErr) {
-      console.log("ℹ️ Firebase Auth initialization skipped:", authErr);
+      // If already initialized, just get the instance
+      if ((authErr as any).code === 'auth/already-initialized') {
+        getAuth(firebaseApp!);
+        console.log("🔐 Firebase Auth already initialized");
+      } else {
+        console.log("ℹ️ Firebase Auth initialization skipped:", authErr);
+      }
     }
 
     // ✅ Analytics (Web 환경에서만)

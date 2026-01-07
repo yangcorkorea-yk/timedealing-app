@@ -7,7 +7,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as SplashScreen from "expo-splash-screen";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Stack } from "expo-router";
-import * as KakaoLogin from "@react-native-seoul/kakao-login";
+import { initializeKakaoSDK } from "@react-native-kakao/core";
+import { login } from "@react-native-kakao/user";
 import * as Notifications from "expo-notifications";
 import * as Location from "expo-location";
 import * as Haptics from "expo-haptics";
@@ -18,140 +19,65 @@ import {
   scheduleLocalTestNotification,
 } from "../src/notifications/NotificationService";
 
-SplashScreen.preventAutoHideAsync();
-
 // ==================== 상수 ====================
 const BUBBLE_API_BASE = "https://timedealing.com/version-test/api/1.1/wf";
 const WEBVIEW_URL = "https://timedealing.com/version-test/";
-// Kakao REST API key (used for web flows)
-const KAKAO_CLIENT_ID = "734ac84c6c99e27b030a2d8006c9761e";
-// Kakao Native App Key (from app.json extra.kakao.nativeAppKey and AndroidManifest meta-data)
-const KAKAO_NATIVE_APP_KEY = "d6914396676906ad440f0d308ed139d1";
-// iOS redirect scheme pattern: kakao{REST_API_KEY}://oauth (per existing config)
-const KAKAO_REDIRECT_URI = `kakao${KAKAO_CLIENT_ID}://oauth`;
-// Android native SDK redirect scheme pattern: kakaod{NATIVE_APP_KEY}://oauth
-// NOTE: Previous value 'kakaoauth://oauth' was incorrect and prevented deep link handling.
-const KAKAO_ANDROID_REDIRECT_URI = `kakaod${KAKAO_NATIVE_APP_KEY}://oauth`;
+// Kakao Native login handled via @react-native-kakao/user (no OAuth redirect URIs needed)
 
 // ==================== 타입 정의 ====================
 interface WebViewMessage {
   type: string;
-  userId?: string;
-  dealId?: string;
-  platform?: string;
-  [key: string]: any;
+  payload?: any;
 }
 
-interface PlatformInfo {
-  platform: string;
-  isApp: boolean;
-  appVersion: string;
-  deviceType: string;
-}
-
-// ==================== 푸시 토큰 저장 ====================
-// Note: Push token is now sent directly in the Kakao login payload (device_token field)
-// This separate endpoint is not needed since Bubble receives it during login
-async function savePushTokenToBubble(
-  userId: string,
-  token: string
-): Promise<boolean> {
-  try {
-    console.log(`📤 [푸시토큰] 이미 로그인 시 전송됨 (device_token) - 별도 저장 불필요`);
-    // Push token was already sent with the Kakao login payload
-    // No need for a separate API call
-    return true;
-  } catch (error) {
-    console.error("❌ [푸시토큰] 처리 오류:", error);
-    return false;
-  }
-}
-
-// ==================== Haptic Feedback Utility ====================
-/**
- * Trigger haptic feedback for UI interactions
- * @param type - Type of haptic feedback ("tab" | "light" | "medium" | "heavy" | "selection")
- */
-async function triggerHaptic(type: "tab" | "light" | "medium" | "heavy" | "selection" = "tab"): Promise<void> {
-  try {
-    if (Platform.OS === "ios") {
-      // iOS uses selectionAsync for tab/selection feedback
-      if (type === "tab" || type === "selection") {
-        await Haptics.selectionAsync();
-      } else {
-        // Map other types to impact feedback
-        const impactStyle = type === "light" 
-          ? Haptics.ImpactFeedbackStyle.Light
-          : type === "medium"
-          ? Haptics.ImpactFeedbackStyle.Medium
-          : Haptics.ImpactFeedbackStyle.Heavy;
-        await Haptics.impactAsync(impactStyle);
-      }
-    } else {
-      // Android uses impact feedback
-      const impactStyle = type === "heavy"
-        ? Haptics.ImpactFeedbackStyle.Heavy
-        : type === "medium"
-        ? Haptics.ImpactFeedbackStyle.Medium
-        : Haptics.ImpactFeedbackStyle.Light;
-      await Haptics.impactAsync(impactStyle);
-    }
-  } catch (error) {
-    console.warn("⚠️ [Haptic] 햅틱 피드백 실패:", error);
-  }
-}
-
-// ==================== 메인 컴포넌트 ====================
 export default function App() {
+  const [webViewUrl, setWebViewUrl] = useState<string>(WEBVIEW_URL);
+  const [isWebViewLoading, setIsWebViewLoading] = useState(true);
+  const [isAppReady, setIsAppReady] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [expoPushToken, setExpoPushToken] = useState<string | null>(null);
+  const [isKakaoLoginInProgress, setIsKakaoLoginInProgress] = useState(false);
   const webViewRef = useRef<WebView>(null);
+  const locationSubscriptionRef = useRef<any>(null);
+  const kakaoLoginInFlightRef = useRef(false);
   const insets = useSafeAreaInsets();
-  const locationSubscriptionRef = useRef<Location.LocationSubscription | null>(null);
+  const [expoPushToken, setExpoPushToken] = useState<string | undefined>(undefined);
 
-  // ==================== 초기화 ====================
+  // Kakao SDK must be initialized once on app start (use Native App Key)
   useEffect(() => {
-    initializeApp();
+    initializeKakaoSDK("d6914396676906ad440f0d308ed139d1");
+    console.log("✅ Kakao SDK initialized");
   }, []);
 
-  // ==================== 딥링크 이벤트 리스너 (GPT 방식) ====================
-  useEffect(() => {
-    // ✅ NativeEventEmitter로 Android 이벤트 수신
-    if (Platform.OS === "android") {
-      try {
-        const eventEmitter = new NativeEventEmitter(NativeModules.ToastExample || NativeModules.RCTNativeAppEventEmitter);
-        
-        const subscription = eventEmitter.addListener("kakaoLogin", async () => {
-          console.log("\n╔════════════════════════════════════════╗");
-          console.log("🎯 [Android] kakaoLogin 이벤트 수신!");
-          console.log("╚════════════════════════════════════════╝\n");
-          
-          // ✅ 이벤트를 받으면 카카오 로그인 시작
-          await handleKakaoLoginRequest("app");
-        });
-
-        console.log("✅ [NativeEventEmitter] kakaoLogin 리스너 등록됨");
-
-        return () => {
-          subscription.remove();
-        };
-      } catch (error) {
-        console.warn("⚠️ [NativeEventEmitter] 설정 실패:", error);
-        // Fallback: 일반 딥링크 리스너 사용
-        const subscription = Linking.addEventListener("url", handleDeepLink);
-        return () => subscription.remove();
-      }
-    } else {
-      // iOS는 일반 딥링크 리스너 사용
-      const subscription = Linking.addEventListener("url", handleDeepLink);
-      return () => subscription.remove();
+  // Safe splash hide helper (avoid unregistered splash rejection in dev client)
+  const hideSplashSafe = useCallback(async () => {
+    try {
+      await SplashScreen.hideAsync();
+    } catch (err) {
+      console.warn("⚠️ [Splash] hideAsync 실패, 무시합니다:", err?.message || err);
     }
   }, []);
 
-  // ==================== 알림 리스너 설정 ====================
+  // Keep splash screen until first meaningful load; ignore errors if already hidden/absent.
   useEffect(() => {
-    console.log("🔔 [알림] 리스너 설정 시작...");
-    
+    SplashScreen.preventAutoHideAsync().catch((err) => {
+      console.warn("⚠️ [Splash] preventAutoHideAsync 실패, 무시합니다:", err?.message || err);
+    });
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        await ensureFirebaseInitialized();
+        console.log("✅ Firebase initialized");
+      } catch (error) {
+        console.error("❌ Firebase initialization failed:", error);
+      }
+
+      const token = await registerForPushNotificationsAsync();
+      setExpoPushToken(token);
+      console.log("📱 Expo Push Token:", token);
+    })();
+
     const cleanup = setupNotificationListeners({
       onNotificationReceived: (notification) => {
         console.log("📩 [포그라운드] 알림 수신:", JSON.stringify(notification, null, 2));
@@ -294,171 +220,19 @@ export default function App() {
     }
   }, []);
 
-  // ==================== 앱 초기화 ====================
-  const initializeApp = useCallback(async () => {
+  // ==================== 카카오 네이티브 로그인 ====================
+  const handleKakaoLogin = useCallback(async () => {
     try {
-      console.log("🚀 [앱초기화] 시작...");
+      console.log("🔑 [카카오] 네이티브 로그인 시작");
+      const token = await login();
 
-      // Firebase 초기화
-      await ensureFirebaseInitialized();
+      console.log("✅ [카카오] 로그인 성공, 토큰:", token.accessToken.substring(0, 20) + "...");
 
-      // 푸시 토큰 등록
-      const token = await registerForPushNotificationsAsync();
-      if (token) {
-        console.log("📱 [푸시토큰] 발급 완료:", token);
-        setExpoPushToken(token);
-
-        // 저장된 userId가 있으면 토큰 전송
-        const savedUserId = await AsyncStorage.getItem("user_id");
-        if (savedUserId) {
-          await savePushTokenToBubble(savedUserId, token);
-        }
-      } else {
-        console.warn("⚠️ [푸시토큰] 발급 실패");
-      }
-
-      console.log("✅ [앱초기화] 완료");
-
-      // 🔥 Cold start: 알림으로 앱이 열렸는지 확인
-      try {
-        const lastResponse = await Notifications.getLastNotificationResponseAsync();
-        if (lastResponse) {
-          const data = lastResponse.notification.request.content.data;
-          console.log("📲 [Cold Start] 알림으로 앱 시작:", JSON.stringify(data, null, 2));
-          
-          if (data && data.url) {
-            console.log("🔗 [Cold Start Push] URL 감지, WebView 이동 예약:", data.url);
-            // Wait for WebView to be ready
-            setTimeout(() => {
-              if (webViewRef.current) {
-                webViewRef.current.injectJavaScript(`window.location.href = "${data.url}"; true;`);
-                console.log("✅ [Cold Start] WebView 이동 완료");
-              }
-            }, 1500);
-          }
-        } else {
-          console.log("ℹ️ [알림] 초기 알림 없음 (일반 앱 시작)");
-        }
-      } catch (e) {
-        console.error("❌ [알림] Cold start 확인 실패:", e);
-      }
-
-      // 🧪 로컬 알림 테스트 (개발 중 1회만)
-      try {
-        const doneKey = "local_notification_test_done";
-        const done = await AsyncStorage.getItem(doneKey);
-        if (__DEV__ && !done) {
-          console.log("🧪 [알림] 로컬 테스트 발송 (5초 후)");
-          setTimeout(async () => {
-            await scheduleLocalTestNotification("디버그 알림", "포그라운드/백그라운드 모두 표시됩니다");
-            console.log("✅ [알림] 로컬 테스트 전송 완료");
-          }, 5000);
-          await AsyncStorage.setItem(doneKey, "1");
-        }
-      } catch (e) {
-        console.warn("⚠️ [알림] 로컬 테스트 실패:", e);
-      }
-
-      // 🔑 Android Kakao KeyHash 로그 (개발자 콘솔 등록용)
-      if (Platform.OS === 'android') {
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const keyHash = await (NativeModules as any).KeyHashModule?.getKeyHash?.();
-          console.log("🔑 [Android] Kakao KeyHash:", keyHash);
-        } catch (e:any) {
-          console.log("⚠️ [Android] KeyHash 가져오기 실패:", e?.message);
-        }
-      }
+      // Fetch user info with access token
+      await fetchKakaoUserInfo(token.accessToken);
     } catch (error) {
-      console.error("❌ [앱초기화] 오류:", error);
-    }
-  }, []);
-
-  // ==================== 일반 딥링크 콜백 (iOS & Fallback) ====================
-  const handleDeepLink = useCallback(async (event: { url: string }) => {
-    try {
-      const url = event.url;
-      console.log("🔗 [딥링크] 수신:", url);
-
-      // ✅ 카카오톡에서 돌아온 인증 코드
-      if (
-  // Accept both iOS (kakao + REST key) and Android (kakaod + native key) schemes
-  (url.includes(`kakaod${KAKAO_NATIVE_APP_KEY}`) || url.includes(`kakao${KAKAO_CLIENT_ID}`)) &&
-        url.includes("code=")
-      ) {
-        console.log("✅ [카카오] 인증 코드 받음");
-        const codeMatch = url.match(/code=([^&]+)/);
-        if (codeMatch && codeMatch[1]) {
-          const authCode = codeMatch[1];
-          console.log("📝 [카카오] 인증코드:", authCode);
-          await exchangeKakaoCode(authCode);
-        }
-      }
-    } catch (error) {
-      console.error("❌ [딥링크] 처리 오류:", error);
-    }
-  }, []);
-
-  // ==================== 카카오 로그인 URL 생성 ====================
-  const generateKakaoAuthUrl = useCallback((): string => {
-    const redirectUri = Platform.OS === "ios" ? KAKAO_REDIRECT_URI : KAKAO_ANDROID_REDIRECT_URI;
-    
-    const params = new URLSearchParams({
-      client_id: KAKAO_CLIENT_ID,
-      redirect_uri: redirectUri,
-      response_type: "code",
-      scope: "profile_nickname,profile_image,account_email",
-    });
-
-    const url = `https://kauth.kakao.com/oauth/authorize?${params.toString()}`;
-    console.log("🔗 [카카오] 생성된 인증 URL:", url);
-    return url;
-  }, []);
-
-  // ==================== 카카오 인증 코드 토큰 교환 ====================
-  const exchangeKakaoCode = useCallback(async (code: string) => {
-    try {
-      console.log("🔄 [카카오] 토큰 교환 시작");
-
-      const redirectUri = Platform.OS === "ios" ? KAKAO_REDIRECT_URI : KAKAO_ANDROID_REDIRECT_URI;
-      
-      const params = new URLSearchParams({
-        grant_type: "authorization_code",
-        client_id: KAKAO_CLIENT_ID,
-        code: code,
-        redirect_uri: redirectUri,
-      });
-
-      const response = await fetch("https://kauth.kakao.com/oauth/token", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: params.toString(),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const tokenData = await response.json();
-      console.log("✅ [카카오] 토큰 받음");
-
-      const accessToken = tokenData.access_token;
-      if (!accessToken) {
-        throw new Error("Access Token 없음");
-      }
-
-      // 사용자 정보 조회
-      await fetchKakaoUserInfo(accessToken);
-    } catch (error) {
-      console.error("❌ [카카오] 토큰 교환 오류:", error);
-      
-      // Fallback: 웹 로그인
-      sendMessageToWebView({
-        type: "SWITCH_TO_WEB_LOGIN",
-        reason: "카카오 토큰 교환 실패",
-      });
+      console.error("❌ [카카오] 네이티브 로그인 실패:", error);
+      Alert.alert("로그인 실패", "카카오 로그인에 실패했습니다.");
     }
   }, []);
 
@@ -517,7 +291,7 @@ export default function App() {
   const handleLoadEnd = useCallback(async () => {
     console.log("✅ [WebView] 로딩 완료");
     setLoading(false);
-    await SplashScreen.hideAsync();
+    await hideSplashSafe();
     
     // ✅ CRITICAL: Send initial location immediately after WebView loads
     // This ensures the user marker appears without waiting for GPS watcher
@@ -550,6 +324,23 @@ export default function App() {
       }
     } catch (error) {
       console.error("❌ [WebView] 초기 위치 가져오기 실패:", error);
+    }
+  }, []);
+
+  // ==================== Haptic Feedback ====================
+  const triggerHaptic = useCallback(async (type: string) => {
+    try {
+      if (type === "tab") {
+        await Haptics.selectionAsync();
+      } else if (type === "impact") {
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      } else if (type === "notification-success") {
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else if (type === "notification-error") {
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }
+    } catch (error) {
+      console.warn("⚠️ [Haptic] 피드백 실패:", error);
     }
   }, []);
 
@@ -677,148 +468,109 @@ export default function App() {
   );
 
   // ==================== 카카오 로그인 요청 ====================
+  // ==================== 카카오 로그인 (Native SDK) ====================
+  const kakaoLogin = async (): Promise<string> => {
+    console.log("🚀 [카카오] 카카오 로그인 시작");
+    try {
+      console.log("📞 [카카오] login() 호출 중...");
+      
+      // Add timeout to detect if login() never resolves
+      const loginPromise = login();
+      const timeoutPromise = new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error("로그인 타임아웃 (30초)")), 30000)
+      );
+      
+      const result = await Promise.race([loginPromise, timeoutPromise]);
+      
+      console.log("📦 [카카오] login() 결과 수신:", JSON.stringify(result).substring(0, 100));
+
+      if (!result?.accessToken) {
+        throw new Error("AccessToken 없음");
+      }
+
+      console.log("✅ [카카오] 로그인 성공, 토큰:", result.accessToken.substring(0, 20) + "...");
+      return result.accessToken;
+    } catch (error: any) {
+      console.error("❌ [카카오] 로그인 실패:", error?.message || error);
+      Alert.alert("카카오 로그인 오류", error?.message || "알 수 없는 오류");
+      throw error;
+    }
+  };
+
+  // ✅ Step 2: Bubble Backend 호출
+  const callBubbleBackend = async (accessToken: string): Promise<any> => {
+    console.log("📡 [Bubble] Backend 호출 시작");
+    console.log("🔑 [accessToken]", accessToken.substring(0, 30) + "...");
+    
+    const res = await fetch(
+      "https://timedealing.com/version-test/api/1.1/wf/kakao-login",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          access_token: accessToken,
+          device_token: expoPushToken || ""
+        })
+      }
+    );
+
+    const result = await res.json();
+    console.log("✅ [Bubble] Backend 응답:", result);
+    
+    return result;
+  };
+
+  // ✅ Step 3: 웹뷰에 결과 전달
+  const sendKakaoLoginResultToWebView = (bubbleResponse: any) => {
+    console.log("📨 [WebView] 카카오 로그인 결과 전달");
+    if (webViewRef.current) {
+      webViewRef.current.postMessage(JSON.stringify({
+        type: "KAKAO_LOGIN_SUCCESS",
+        payload: bubbleResponse
+      }));
+    }
+  };
+
+  // ✅ 카카오 로그인 요청 핸들러
   const handleKakaoLoginRequest = useCallback(async (platform: string) => {
     try {
+      if (kakaoLoginInFlightRef.current) {
+        console.log("⏳ [카카오] 로그인 이미 진행 중, 요청 무시");
+        return;
+      }
+
+      kakaoLoginInFlightRef.current = true;
+      setIsKakaoLoginInProgress(true);
       console.log(`📱 [카카오] ${platform} 로그인 시작`);
-
-        // ✅ 네이티브 카카오 SDK를 사용한 app-to-app 로그인
-        console.log("🚀 [카카오] 네이티브 SDK 로그인 시작 (app-to-app)");
-        const kakaoAppAvailable = await KakaoLogin.getAccessToken().then(() => true).catch(() => true); // SDK presence heuristic
-        console.log("🔎 [카카오] SDK 가용성:", kakaoAppAvailable);
-        console.log("🔗 [카카오] 예상 Redirect(Android):", `kakaod${KAKAO_NATIVE_APP_KEY}://oauth`);
-        console.log("🔗 [카카오] 예상 Redirect(iOS):", `kakao${KAKAO_CLIENT_ID}://oauth`);
       
-        // ✅ 이메일 스코프를 포함하여 로그인 요청
-        console.log("📧 [카카오] 이메일 동의 항목 포함하여 로그인 요청");
-        const result = await KakaoLogin.login();
-        console.log("✅ [카카오] 네이티브 로그인 성공:", result);
+      // Step 1: 카카오 SDK로 로그인
+      const accessToken = await kakaoLogin();
       
-        // 액세스 토큰으로 사용자 정보 가져오기
-        const profile = await KakaoLogin.getProfile();
-        console.log("👤 [카카오] 프로필 정보:", profile);
-
-        // ✅ 이메일 및 프로필 이미지 확인
-        if (!profile.email || profile.emailNeedsAgreement) {
-          console.warn("⚠️ [카카오] 이메일 정보 없음 - Kakao Developers Console에서 '이메일' 동의 항목을 필수로 설정해주세요");
-          console.warn("⚠️ 설정 경로: https://developers.kakao.com/console/app → 제품 설정 → 카카오 로그인 → 동의 항목");
-        }
-        if (!profile.profileImageUrl || profile.profileNeedsAgreement) {
-          console.warn("⚠️ [카카오] 프로필 이미지 정보 없음 - '프로필 정보(닉네임/프로필 사진)' 동의 항목을 필수로 설정해주세요");
-        }
+      // Step 2: Bubble Backend 호출
+      const bubbleResponse = await callBubbleBackend(accessToken);
       
-        // Bubble에 사용자 정보 직접 전송 (모든 토큰 정보 포함)
-        const payload = {
-          kakao_id: String(profile.id),
-          nickname: profile.nickname || "",
-          email: profile.email || "",
-          profile_image_url: profile.profileImageUrl || profile.thumbnailImageUrl || "",
-          thumbnail_image_url: profile.thumbnailImageUrl || "",
-          access_token: result.accessToken,
-          access_token_expires_at: result.accessTokenExpiresAt || "",
-          refresh_token: result.refreshToken || "",
-          refresh_token_expires_at: result.refreshTokenExpiresAt || "",
-          id_token: result.idToken || "",
-          scopes: result.scopes || [],
-          device_token: expoPushToken || "",
-        };
-        
-        console.log("📤 [전송 Payload] → Bubble:", payload);
-        
-        const response = await fetch(`https://timedealing.com/version-test/api/1.1/wf/kakao-native-login`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
+      // Step 3: 웹뷰로 결과 전달
+      sendKakaoLoginResultToWebView(bubbleResponse);
       
-        const bubbleResult = await response.json();
-        console.log("✅ [Bubble] 카카오 로그인 응답:", bubbleResult);
-      
-        // ✅ Bubble에서 반환한 code와 user_id 처리
-        if (bubbleResult.response?.code) {
-          const code = bubbleResult.response.code;
-          const userId = bubbleResult.response.user_id;
-          
-          console.log("🔑 [Bubble] 인증 코드 수신:", code);
-          console.log("👤 [Bubble] 사용자 ID:", userId);
-          
-          // 사용자 ID 저장 (있는 경우)
-          if (userId) {
-            await AsyncStorage.setItem("user_id", userId);
-            console.log("💾 [저장] 사용자 ID:", userId);
-            
-            // 푸시 토큰 저장
-            if (expoPushToken) {
-              await savePushTokenToBubble(userId, expoPushToken);
-            }
-          }
-        
-          // ✅ WebView를 Bubble의 kakao-login 페이지로 리다이렉트 (code 전달)
-          const redirectUrl = `https://timedealing.com/version-test/kakao-login?code=${code}&platform=app`;
-          console.log("🔄 [리다이렉트] WebView 페이지 이동:", redirectUrl);
-          
-          // WebView 네비게이션 실행
-          if (webViewRef.current) {
-            webViewRef.current.injectJavaScript(`window.location.href = "${redirectUrl}";`);
-          }
-        } else if (bubbleResult.response?.user_id) {
-          // ✅ Fallback: code 없이 user_id만 있는 경우 (기존 로직)
-          const userId = bubbleResult.response.user_id;
-          await AsyncStorage.setItem("user_id", userId);
-          console.log("💾 [저장] 사용자 ID:", userId);
-        
-          // 푸시 토큰 저장
-          if (expoPushToken) {
-            await savePushTokenToBubble(userId, expoPushToken);
-          }
-        
-          // WebView를 로그인 후 페이지로 리다이렉트
-          const loginUrl = `https://timedealing.com/version-test/index?user_id=${userId}&platform=app`;
-          console.log("🔄 [리다이렉트] WebView 페이지 이동:", loginUrl);
-          
-          // WebView 네비게이션 실행
-          if (webViewRef.current) {
-            webViewRef.current.injectJavaScript(`window.location.href = "${loginUrl}";`);
-          }
-        } else {
-          // ❌ 응답에 code도 user_id도 없는 경우
-          console.error("❌ [Bubble] 응답에 code 또는 user_id가 없습니다:", bubbleResult);
-          Alert.alert("로그인 실패", "서버 응답이 올바르지 않습니다.");
-        }
-      
+      // Step 4: AsyncStorage에 사용자 ID 저장
+      const userId = bubbleResponse.response?.user_id;
+      if (userId) {
+        await AsyncStorage.setItem("user_id", userId);
+        console.log("💾 [저장] 사용자 ID:", userId);
+        // Legacy flag removed to avoid auto-navigation logic elsewhere
+        // await AsyncStorage.setItem("isLoggedIn", "true");
+      }
     } catch (error: any) {
-        console.error("❌ [카카오] 네이티브 로그인 실패:", error);
-        console.log("🧪 [카카오] 오류 상세:", {
-          name: error?.name,
-          message: error?.message,
-          code: error?.code,
-          stack: error?.stack?.split('\n')[0]
-        });
+      console.error("❌ [카카오] 로그인 실패:", error?.message || error);
+      Alert.alert("카카오 로그인 실패", error?.message || "카카오 로그인에 실패했습니다.");
       
-        // 사용자가 취소한 경우
-        if (error?.message?.toLowerCase?.().includes("cancel")) {
-          console.log("ℹ️ [카카오] 사용자가 로그인을 취소했습니다");
-          Alert.alert("알림", "카카오 로그인이 취소되었습니다.");
-        } else {
-          // 실패 시 웹 로그인으로 전환
-          Alert.alert(
-            "카카오 로그인 실패",
-            "카카오 앱을 통한 로그인에 실패했습니다. 웹 로그인을 시도하시겠습니까?",
-            [
-              { text: "취소", style: "cancel" },
-              {
-                text: "웹 로그인",
-                onPress: () => {
-                  sendMessageToWebView({
-                    type: "SWITCH_TO_WEB_LOGIN",
-                    reason: "네이티브 카카오 로그인 실패",
-                  });
-                },
-              },
-            ]
-          );
-        }
+      // 실패 시에도 웹뷰에 알림
+      sendKakaoLoginResultToWebView({ error: error?.message });
+    } finally {
+      kakaoLoginInFlightRef.current = false;
+      setIsKakaoLoginInProgress(false);
     }
-    }, [expoPushToken]);
+  }, [expoPushToken]);
 
   // ==================== 로그인 성공 처리 ====================
   const handleLoginSuccess = useCallback(
@@ -879,6 +631,52 @@ export default function App() {
   const injectedJavaScript = `
     (function() {
       try {
+        // ==================== CRITICAL: Disable Bubble's Kakao Web OAuth ====================
+        // Override Kakao SDK methods to prevent Bubble from running Web OAuth
+        // This ensures only RN Native SDK handles Kakao login
+        console.log('[RN→WebView] Installing Kakao Web OAuth blocker...');
+        
+        // Wait for Kakao SDK to load, then override it
+        const disableKakaoWebAuth = () => {
+          if (typeof window.Kakao !== 'undefined' && window.Kakao.Auth) {
+            console.log('[RN→WebView] ⚠️ Kakao JS SDK detected → Disabling Web OAuth methods');
+            
+            // Override authorize (Web OAuth redirect)
+            window.Kakao.Auth.authorize = function() {
+              console.log('[RN→WebView] 🚫 Kakao.Auth.authorize blocked (RN Native only)');
+              if (window.ReactNativeWebView) {
+                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'KAKAO_LOGIN' }));
+              }
+            };
+            
+            // Override login (Web OAuth popup)
+            window.Kakao.Auth.login = function() {
+              console.log('[RN→WebView] 🚫 Kakao.Auth.login blocked (RN Native only)');
+              if (window.ReactNativeWebView) {
+                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'KAKAO_LOGIN' }));
+              }
+            };
+            
+            console.log('[RN→WebView] ✅ Kakao Web OAuth disabled successfully');
+          }
+        };
+        
+        // Try immediately
+        disableKakaoWebAuth();
+        
+        // Retry periodically for 5 seconds (in case SDK loads later)
+        let attempts = 0;
+        const checkInterval = setInterval(() => {
+          attempts++;
+          if (typeof window.Kakao !== 'undefined' && window.Kakao.Auth) {
+            disableKakaoWebAuth();
+            clearInterval(checkInterval);
+          } else if (attempts > 50) { // 50 * 100ms = 5 seconds
+            clearInterval(checkInterval);
+            console.log('[RN→WebView] Kakao SDK not detected after 5s → assuming not loaded');
+          }
+        }, 100);
+        
         // ==================== Map Center Preservation System ====================
         // Define default Seoul coordinates (should only be used on initial load)
         const DEFAULT_SEOUL_LAT = 37.566826;
@@ -1193,11 +991,33 @@ export default function App() {
           style={styles.webview}
           onShouldStartLoadWithRequest={(request) => {
             const url = request.url;
+            const loweredUrl = url.toLowerCase();
+            const isKakaoFlow = isKakaoLoginInProgress || kakaoLoginInFlightRef.current;
 
             console.log("\n═══════════════════════════════════════");
             console.log("📍 [WebView] 링크 감지!");
             console.log("   URL:", url);
             console.log("═══════════════════════════════════════\n");
+
+            // ✅ CRITICAL: Block ALL oauth page navigation (Bubble's Web OAuth)
+            // This prevents Bubble's Kakao JS SDK from hijacking the login flow
+            if (loweredUrl.includes("/oauth") || loweredUrl.includes("oauth-login") || loweredUrl.includes("kakao-callback")) {
+              console.log("🚫 [WebView] OAuth 페이지 차단 (Bubble Web OAuth 무력화)", url);
+              // Force redirect back to main page
+              if (webViewRef.current) {
+                setTimeout(() => {
+                  console.log("🔄 [WebView] 메인 페이지로 강제 리다이렉트");
+                  webViewRef.current?.injectJavaScript(`window.location.href = "${WEBVIEW_URL}"; true;`);
+                }, 100);
+              }
+              return false;
+            }
+
+            // ✅ Block Kakao OAuth authorize URLs
+            if (loweredUrl.includes("kauth.kakao.com") && loweredUrl.includes("authorize")) {
+              console.log("🚫 [WebView] Kakao Web OAuth authorize 차단", url);
+              return false;
+            }
 
             // ✅ Remove legacy timedealing://kakao-login interception (handled by native deep link elsewhere)
             if (url.startsWith("timedealing://kakao-login")) {
@@ -1231,33 +1051,11 @@ export default function App() {
             // ✅ kakao native schemes (kakao..., kakaod...)
             if (/^kakao[a-z0-9]*:\/\//i.test(url)) {
               console.log("🔐 Kakao 스킴 감지!", url);
-              console.log("🔄 [Kakao] 네이티브 SDK 로그인으로 전환합니다...");
-              
-              // Instead of trying to open the OAuth URL, trigger native SDK login
-              handleKakaoLoginRequest("Android")
-                .catch(error => {
-                  console.error("❌ [Kakao] 네이티브 로그인 호출 실패:", error);
-                  // Fallback: Try to open KakaoTalk directly
-                  Linking.canOpenURL("kakaotalk://")
-                    .then(supported => {
-                      if (supported) {
-                        return Linking.openURL("kakaotalk://");
-                      } else {
-                        console.warn("⚠️ KakaoTalk 미설치. Play Store 이동...");
-                        return Linking.openURL('market://details?id=com.kakao.talk')
-                          .catch(() => Linking.openURL('https://play.google.com/store/apps/details?id=com.kakao.talk'));
-                      }
-                    })
-                    .catch(err => console.error("❌ Fallback 실패:", err));
-                });
-              
+              // WebView 대신 OS에 위임
+              Linking.canOpenURL(url)
+                .then((supported) => (supported ? Linking.openURL(url) : Promise.reject(new Error("KakaoTalk 미설치"))))
+                .catch((err) => console.warn("⚠️ Kakao 스킴 처리 실패:", err?.message || err));
               return false;
-            }
-
-            // ✅ Native Kakao redirect scheme now handled by Linking listener; do not intercept
-            if (url.startsWith(`kakaod${KAKAO_NATIVE_APP_KEY}://`) || url.startsWith(`kakao${KAKAO_CLIENT_ID}://`)) {
-              console.log("ℹ️ [WebView] Kakao native redirect 스킴 WebView 패스스루");
-              return true;
             }
 
             // ✅ HTTP/HTTPS는 정상 로드

@@ -13,7 +13,8 @@
     "@react-native-async-storage/async-storage": "1.23.1",
     "@react-native-firebase/app": "^18.8.0",
     "@react-native-firebase/auth": "^18.8.0",
-    "@react-native-seoul/kakao-login": "^5.4.2",
+    "@react-native-kakao/core": "1.7.0",
+    "@react-native-kakao/user": "1.7.0",
     "axios": "^1.12.2",
     "expo": "~51.0.0",
     "expo-build-properties": "~0.12.5",
@@ -43,29 +44,5 @@
     "expo-modules-autolinking": "^1.10.2",
     "patch-package": "^8.0.1",
     "typescript": "~5.3.3"
-  },
-  "codegenConfig": {
-    "libraries": [
-      {
-        "name": "@react-native-async-storage/async-storage",
-        "type": "all",
-        "jsSrcsDir": "."
-      },
-      {
-        "name": "react-native-webview",
-        "type": "all",
-        "jsSrcsDir": "."
-      },
-      {
-        "name": "react-native-screens",
-        "type": "all",
-        "jsSrcsDir": "."
-      },
-      {
-        "name": "react-native-safe-area-context",
-        "type": "all",
-        "jsSrcsDir": "."
-      }
-    ]
   }
 }

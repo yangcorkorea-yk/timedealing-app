@@ -57,7 +57,7 @@ export default function KakaoLogin() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               code,
-              uri: "https://timedealing.com/kakao-login", // redirect URI
+              uri: "https://timedealing.com/version-test/kakao-login", // redirect URI
               state,
             }),
           }
@@ -76,7 +76,8 @@ export default function KakaoLogin() {
         }
 
         // 홈 화면으로 이동
-        router.replace("/");
+        // Legacy redirect disabled to prevent premature home navigation during native Kakao flow
+        // router.replace("/");
       } catch (error) {
         console.log("❌ 카카오 로그인 실패:", error);
       }

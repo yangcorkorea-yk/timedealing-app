@@ -2,12 +2,13 @@
   "expo": {
     "sdkVersion": "51.0.0",
     "name": "TimeDealing",
-    "slug": "timedealing-app",
+    "slug": "timedealing",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "scheme": "timedealing",
+      "newArchEnabled": false,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -18,17 +19,42 @@
       "bundleIdentifier": "com.linkonomy.timedealing",
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
-        "UIBackgroundModes": ["remote-notification"],
+        "UIBackgroundModes": [
+          "remote-notification",
+          "remote-notification"
+        ],
         "NSUserTrackingUsageDescription": "이 앱은 맞춤 알림 제공을 위해 알림 권한을 사용합니다.",
         "CFBundleURLTypes": [
-          { "CFBundleURLSchemes": ["timedealing"] },
-          { "CFBundleURLSchemes": ["kakaod6914396676906ad440f0d308ed139d1"] }
+          {
+            "CFBundleURLSchemes": [
+              "timedealing"
+            ]
+          },
+          {
+            "CFBundleURLSchemes": [
+              "kakaod6914396676906ad440f0d308ed139d1"
+            ]
+          },
+          {
+            "CFBundleURLSchemes": [
+              "timedealing"
+            ]
+          },
+          {
+            "CFBundleURLSchemes": [
+              "kakaod6914396676906ad440f0d308ed139d1"
+            ]
+          }
         ],
         "LSApplicationQueriesSchemes": [
           "kakaokompassauth",
           "kakaolink",
+          "kakaotalk",
+          "kakaokompassauth",
+          "kakaolink",
           "kakaotalk"
-        ]
+        ],
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -54,23 +80,53 @@
       "intentFilters": [
         {
           "action": "VIEW",
-          "data": [{ "scheme": "timedealing", "host": "kakao-login" }],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "data": [
+            {
+              "scheme": "timedealing",
+              "host": "kakao-login"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         },
         {
           "action": "VIEW",
-          "data": [{ "scheme": "kakaolink" }],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "data": [
+            {
+              "scheme": "kakaolink"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         },
         {
           "action": "VIEW",
-          "data": [{ "scheme": "timedealing", "host": "expo-development-client" }],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "data": [
+            {
+              "scheme": "timedealing",
+              "host": "expo-development-client"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         },
         {
           "action": "VIEW",
-          "data": [{ "scheme": "https" }],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "data": [
+            {
+              "scheme": "https"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
@@ -78,6 +134,16 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      [
+        "@react-native-kakao/core",
+        {
+          "nativeAppKey": "d6914396676906ad440f0d308ed139d1",
+          "kakaoTalkScheme": "timedealing",
+          "ios": {
+            "appKey": "d6914396676906ad440f0d308ed139d1"
+          }
+        }
+      ],
       [
         "expo-build-properties",
         {
@@ -88,7 +154,8 @@
             "kotlinVersion": "1.9.22"
           },
           "ios": {
-            "deploymentTarget": "15.1"
+            "deploymentTarget": "13.4",
+            "useModularHeaders": true
           }
         }
       ],
