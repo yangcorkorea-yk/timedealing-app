@@ -1,0 +1,6 @@
+module RNCKakaoUser {
+  umbrella header "RNCKakaoUser-umbrella.h"
+
+  export *
+  module * { export * }
+}

@@ -1,0 +1,1 @@
+../../../../../node_modules/@react-native-kakao/core/ios/RNCKakaoCore.h

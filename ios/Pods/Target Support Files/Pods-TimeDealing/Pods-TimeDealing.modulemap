@@ -1,0 +1,6 @@
+module Pods_TimeDealing {
+  umbrella header "Pods-TimeDealing-umbrella.h"
+
+  export *
+  module * { export * }
+}
