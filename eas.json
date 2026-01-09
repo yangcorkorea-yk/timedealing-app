@@ -14,7 +14,7 @@
     "production": {
       "autoIncrement": true,
       "ios": {
-        "image": "macos-14"
+        "image": "latest"
       }
     }
   },
