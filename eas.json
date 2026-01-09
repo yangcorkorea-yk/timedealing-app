@@ -14,7 +14,8 @@
     "production": {
       "autoIncrement": true,
       "ios": {
-        "image": "stable"
+        "image": "macos-14",
+        "xcodeVersion": "16.0"
       }
     }
   },
